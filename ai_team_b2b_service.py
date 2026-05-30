@@ -700,6 +700,40 @@ class BotToBotTeam:
         self.agent_backend = os.environ.get("AGENT_BACKEND", "tmux_hermes").strip().lower()
         self.tmux_client = TmuxHermesClient(self.project_dir, self.artifacts_dir)
 
+    async def initialize_role_bot(self, role: str, config: RoleConfig) -> None:
+        token = require_env(config.token_env, BOT_TOKEN_RE)
+        attempt = 0
+        while True:
+            attempt += 1
+            bot = Bot(token, request=make_request(self.timeout))
+            try:
+                await bot.initialize()
+                me = await bot.get_me()
+            except (TimedOut, NetworkError) as exc:
+                print(
+                    f"{role} initialize retry after {type(exc).__name__} "
+                    f"(attempt {attempt}): {exc}",
+                    flush=True,
+                )
+                try:
+                    await bot.shutdown()
+                except Exception:
+                    pass
+                await asyncio.sleep(min(30, 3 * attempt))
+                continue
+            except TelegramError:
+                try:
+                    await bot.shutdown()
+                except Exception:
+                    pass
+                raise
+
+            self.bots[role] = bot
+            self.usernames[role] = me.username or ""
+            self.user_ids[role] = me.id
+            print(f"{role}: @{self.usernames[role]}", flush=True)
+            return
+
     async def complete_role(self, role: str, system_prompt: str, user_prompt: str) -> str:
         if self.agent_backend == "tmux_hermes":
             try:
@@ -711,13 +745,7 @@ class BotToBotTeam:
 
     async def initialize(self) -> None:
         for role, config in ROLES.items():
-            bot = Bot(require_env(config.token_env, BOT_TOKEN_RE), request=make_request(self.timeout))
-            await bot.initialize()
-            me = await bot.get_me()
-            self.bots[role] = bot
-            self.usernames[role] = me.username or ""
-            self.user_ids[role] = me.id
-            print(f"{role}: @{self.usernames[role]}", flush=True)
+            await self.initialize_role_bot(role, config)
 
     async def shutdown(self) -> None:
         for bot in self.bots.values():
@@ -1303,10 +1331,13 @@ HANDOFF_SUMMARY: ...
 
     async def run(self) -> None:
         await self.initialize()
-        await self.send_as(
-            "Supervisor",
-            "[SYSTEM][Supervisor][ONLINE]\nBot-to-Bot 经理调度版已启动。发送 /new 你的任务 开始。",
-        )
+        try:
+            await self.send_as(
+                "Supervisor",
+                "[SYSTEM][Supervisor][ONLINE]\nBot-to-Bot 经理调度版已启动。发送 /new 你的任务 开始。",
+            )
+        except (TimedOut, NetworkError, TelegramError) as exc:
+            print(f"Startup online message skipped after {type(exc).__name__}: {exc}", flush=True)
         tasks = [asyncio.create_task(self.poll_role(role)) for role in ROLES]
         try:
             results = await asyncio.gather(*tasks, return_exceptions=True)
