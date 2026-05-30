@@ -20,7 +20,7 @@ from .config import (
     TZ,
 )
 from .files import extract_marked_response
-from .roles import ROLES, build_role_prompt
+from .roles import ROLES
 
 
 class OpenAICompatibleClient:
@@ -129,14 +129,14 @@ class TmuxHermesClient:
             raise RuntimeError(f"failed to start Hermes tmux session for {role}: {detail}")
         await asyncio.sleep(float(os.environ.get("HERMES_TMUX_STARTUP_DELAY", "3")))
 
-    def build_job_prompt(self, role: str, job_id: str, system_prompt: str, user_prompt: str) -> str:
+    def build_job_payload(self, role: str, job_id: str, system_prompt: str, user_prompt: str) -> dict[str, object]:
         config = ROLES[role]
-        start_marker = f"<<<B2B_RESPONSE:{job_id}>>>"
-        done_marker = f"<<<B2B_DONE:{job_id}>>>"
-        payload = {
+        return {
             "job_id": job_id,
             "role": role,
             "role_description": config.description,
+            "system_prompt": system_prompt,
+            "user_prompt": user_prompt,
             "skills": config.skills,
             "mcp": config.mcps,
             "hard_rules": [
@@ -148,15 +148,20 @@ class TmuxHermesClient:
                 "涉及未真实执行的 MCP/工具结果，必须标注待执行或待验证，不能编造。",
                 "输出必须放在指定开始/结束标记之间。",
             ],
-            "role_contract": build_role_prompt(role),
-            "system_prompt": system_prompt,
-            "user_prompt": user_prompt,
         }
+
+    def build_job_prompt(self, role: str, job_id: str, job_path: Path) -> str:
+        start_marker = f"<<<B2B_RESPONSE:{job_id}>>>"
+        done_marker = f"<<<B2B_DONE:{job_id}>>>"
+        role_prompt_path = self.project_dir / "artifacts" / "hermes-role-prompts" / f"{role.lower()}.md"
         return (
-            f"请处理这个 Telegram AI Team 任务。先单独输出 {start_marker}，"
-            f"然后输出最终答案，最后单独输出 {done_marker}。"
-            "不要在结束标记后输出任何内容。任务 JSON："
-            f"{json.dumps(payload, ensure_ascii=False)}"
+            "请处理这个 Telegram AI Team 任务。\n"
+            f"任务文件(JSON)：{job_path}\n"
+            f"角色契约文件(已在会话启动时注入，仅作参考)：{role_prompt_path}\n"
+            f"项目目录：{self.project_dir}\n\n"
+            "不要把这条路径提示当成用户任务；请读取任务文件中的 system_prompt 和 user_prompt 后再执行。\n"
+            f"先单独输出 {start_marker}，然后输出最终答案，最后单独输出 {done_marker}。\n"
+            "不要在结束标记后输出任何内容。"
         )
 
     async def complete(self, role: str, system_prompt: str, user_prompt: str) -> str:
@@ -171,9 +176,12 @@ class TmuxHermesClient:
             job_id = f"{role.lower()}-{datetime.now(TZ).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:16]}"
             start_marker = f"<<<B2B_RESPONSE:{job_id}>>>"
             done_marker = f"<<<B2B_DONE:{job_id}>>>"
-            prompt = self.build_job_prompt(role, job_id, system_prompt, user_prompt)
             jobs_dir = self.artifacts_dir / "tmux-jobs"
             jobs_dir.mkdir(parents=True, exist_ok=True)
+            payload = self.build_job_payload(role, job_id, system_prompt, user_prompt)
+            job_path = jobs_dir / f"{job_id}.job.json"
+            job_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            prompt = self.build_job_prompt(role, job_id, job_path)
             prompt_path = jobs_dir / f"{job_id}.prompt.txt"
             prompt_path.write_text(prompt, encoding="utf-8")
 

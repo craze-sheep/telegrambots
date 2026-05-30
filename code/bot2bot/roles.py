@@ -16,7 +16,7 @@ ROLES = {
             "holographic:fact_feedback",
             "sequential_thinking:sequentialthinking",
         ),
-        toolsets=("skills", "todo", "messaging", "holographic", "sequential-thinking"),
+        toolsets=("skills", "todo", "file", "messaging", "holographic", "sequential-thinking"),
     ),
     "Planner": RoleConfig(
         "Planner",
@@ -241,5 +241,4 @@ def build_role_prompt(role: str) -> str:
         )
 
     return "\n".join(lines).strip() + "\n"
-
 

@@ -501,6 +501,12 @@ class BotToBotTeam:
         return any(
             keyword in normalized
             for keyword in (
+                "你是谁",
+                "你是什么",
+                "你是什么人",
+                "自我介绍",
+                "介绍一下你自己",
+                "whoareyou",
                 "团队人数",
                 "几个人",
                 "多少人",
@@ -509,6 +515,19 @@ class BotToBotTeam:
                 "功能和职责",
                 "职责",
                 "团队成员",
+            )
+        )
+
+    def is_invalid_job_prompt_complaint(self, text: str) -> bool:
+        normalized = re.sub(r"\s+", "", text.lower())
+        return any(
+            keyword in normalized
+            for keyword in (
+                "任务json不完整",
+                "json不完整",
+                "user_prompt缺失",
+                "userprompt缺失",
+                "role_contract后内容缺失",
             )
         )
 
@@ -580,6 +599,8 @@ HANDOFF_SUMMARY: 300 字以内交接摘要
         try:
             raw = await self.complete_role("Supervisor", system_prompt, user_prompt)
             target_role, message, summary = parse_manager_output(raw, fallback_role)
+            if self.is_invalid_job_prompt_complaint(f"{message}\n{summary}"):
+                raise RuntimeError("Supervisor reported an incomplete internal job prompt")
             state.summary = summary
             if target_role == "DONE":
                 state.completed = True

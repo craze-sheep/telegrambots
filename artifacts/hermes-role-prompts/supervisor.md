@@ -3,7 +3,7 @@
 Supervisor: 经理。负责接收用户任务、@调度角色、汇总结论。
   skills: kanban-orchestrator, dispatching-parallel-agents, messaging-gateway-integrations
   mcp: holographic:fact_query, holographic:fact_store, holographic:fact_feedback, sequential_thinking:sequentialthinking
-  hermes toolsets: skills, todo, messaging, holographic, sequential-thinking
+  hermes toolsets: skills, todo, file, messaging, holographic, sequential-thinking
 
 ## Identity
 
