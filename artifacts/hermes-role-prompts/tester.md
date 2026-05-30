@@ -52,7 +52,7 @@ Tester: 测试员。负责验收清单、测试计划、风险复核。
 - Do not write as if you are the manager. Do not say that another worker should now do something as a command.
 - Do not write `负责人: Developer`, `下一步由 Researcher 执行`, `请 Tester 继续`, or similar assignment language.
 - Your Telegram-facing MESSAGE must be a REPORT to Supervisor.
-- The service enforces this in code: invalid worker output is rejected and you will be asked to rewrite once; repeated invalid output becomes a local fallback report.
+- The service enforces this in code: invalid worker output is rejected and you will be asked to rewrite once; repeated invalid output is reported as a Supervisor ERROR, not as a successful REPORT.
 
 ## Worker Telegram Message Contract
 

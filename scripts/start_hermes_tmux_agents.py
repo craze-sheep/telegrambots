@@ -12,9 +12,10 @@ from pathlib import Path
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT_DIR))
+sys.path.insert(0, str(PROJECT_DIR / "code"))
 
-from ai_team_b2b_service import ROLES, build_role_prompt, load_dotenv  # noqa: E402
+from bot2bot.config import load_dotenv  # noqa: E402
+from bot2bot.roles import ROLES, build_role_prompt  # noqa: E402
 
 
 def run(command: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -97,6 +98,8 @@ def build_hermes_command(role: str) -> str:
         "--source",
         f"telegrambots-{role.lower()}",
     ]
+    if os.environ.get("HERMES_IGNORE_USER_CONFIG", "1") == "1":
+        args.append("--ignore-user-config")
     if os.environ.get("HERMES_TMUX_YOLO", "0") == "1":
         if os.environ.get("HERMES_TMUX_ALLOW_YOLO") != "I_UNDERSTAND":
             raise SystemExit(
@@ -134,7 +137,7 @@ def start_role(role: str, restart: bool = False) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Start persistent Hermes tmux agents for Telegram AI Team.")
-    parser.add_argument("--env-file", default=".env")
+    parser.add_argument("--env-file", default=str(PROJECT_DIR / ".env"))
     parser.add_argument("--role", choices=tuple(ROLES), help="Start only one role.")
     parser.add_argument("--restart", action="store_true", help="Restart existing role sessions.")
     return parser.parse_args()
@@ -142,7 +145,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    load_dotenv(PROJECT_DIR / args.env_file)
+    env_path = Path(args.env_file).expanduser()
+    if not env_path.is_absolute():
+        env_path = PROJECT_DIR / env_path
+    load_dotenv(env_path)
     roles = [args.role] if args.role else list(ROLES)
     for role in roles:
         start_role(role, restart=args.restart)

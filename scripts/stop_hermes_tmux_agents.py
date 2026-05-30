@@ -11,9 +11,10 @@ from pathlib import Path
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT_DIR))
+sys.path.insert(0, str(PROJECT_DIR / "code"))
 
-from ai_team_b2b_service import ROLES, load_dotenv  # noqa: E402
+from bot2bot.config import load_dotenv  # noqa: E402
+from bot2bot.roles import ROLES  # noqa: E402
 
 
 def session_name(role: str) -> str:
@@ -32,14 +33,17 @@ def stop_role(role: str) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Stop persistent Hermes tmux agents.")
-    parser.add_argument("--env-file", default=".env")
+    parser.add_argument("--env-file", default=str(PROJECT_DIR / ".env"))
     parser.add_argument("--role", choices=tuple(ROLES), help="Stop only one role.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    load_dotenv(PROJECT_DIR / args.env_file)
+    env_path = Path(args.env_file).expanduser()
+    if not env_path.is_absolute():
+        env_path = PROJECT_DIR / env_path
+    load_dotenv(env_path)
     roles = [args.role] if args.role else list(ROLES)
     for role in roles:
         stop_role(role)
